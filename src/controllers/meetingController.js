@@ -24,26 +24,26 @@ export async function addMeeting(req, res) {
     }
 
     // Create meeting entry
-    const meeting = meetingService.createMeeting(meetingUrl, grantId);
+    const meeting = await meetingService.createMeeting(meetingUrl, grantId);
 
     // Deploy notetaker bot
     try {
       const notetakerResponse = await nylasService.deployNotetaker(grantId, meetingUrl);
 
       if (notetakerResponse.id) {
-        meetingService.setNotetakerId(meeting.id, notetakerResponse.id);
-        meetingService.updateMeeting(meeting.id, {
+        await meetingService.setNotetakerId(meeting.id, notetakerResponse.id);
+        await meetingService.updateMeeting(meeting.id, {
           status: 'joining',
           notetakerId: notetakerResponse.id,
         });
-        meetingService.updateProgress(meeting.id, 'Bot deployed. Joining meeting...', 20);
+        await meetingService.updateProgress(meeting.id, 'Bot deployed. Joining meeting...', 20);
       }
     } catch (error) {
       console.error('Error deploying notetaker:', error);
-      meetingService.updateMeeting(meeting.id, {
+      await meetingService.updateMeeting(meeting.id, {
         status: 'failed',
       });
-      meetingService.updateProgress(meeting.id, `Error: ${error.message}`, 0);
+      await meetingService.updateProgress(meeting.id, `Error: ${error.message}`, 0);
     }
 
     res.status(201).json({
@@ -69,7 +69,7 @@ export async function addMeeting(req, res) {
 export async function getMeetingStatus(req, res) {
   try {
     const { meetingId } = req.params;
-    const meeting = meetingService.getMeeting(meetingId);
+    const meeting = await meetingService.getMeeting(meetingId);
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });
@@ -108,8 +108,8 @@ export async function getMeetingStatus(req, res) {
               break;
           }
 
-          meetingService.updateMeeting(meeting.id, { status: newStatus });
-          meetingService.updateProgress(meeting.id, progressMessage, progressPercentage);
+          await meetingService.updateMeeting(meeting.id, { status: newStatus });
+          await meetingService.updateProgress(meeting.id, progressMessage, progressPercentage);
 
           // If completed, fetch transcript and generate note
           if (notetakerStatus.status === 'completed' && !meeting.note) {
@@ -120,9 +120,9 @@ export async function getMeetingStatus(req, res) {
               );
               
               if (transcript) {
-                meetingService.setTranscript(meeting.id, transcript);
+                await meetingService.setTranscript(meeting.id, transcript);
                 const note = generateNote(transcript);
-                meetingService.setNote(meeting.id, note);
+                await meetingService.setNote(meeting.id, note);
               }
             } catch (error) {
               console.error('Error fetching transcript:', error);
@@ -141,7 +141,7 @@ export async function getMeetingStatus(req, res) {
     }
 
     // Return updated meeting
-    const updatedMeeting = meetingService.getMeeting(meetingId);
+    const updatedMeeting = await meetingService.getMeeting(meetingId);
     res.json({
       success: true,
       meeting: updatedMeeting,
@@ -158,7 +158,7 @@ export async function getMeetingStatus(req, res) {
  */
 export async function getAllMeetings(req, res) {
   try {
-    const meetings = meetingService.getAllMeetings();
+    const meetings = await meetingService.getAllMeetings();
     res.json({
       success: true,
       meetings: meetings.map(m => ({
@@ -183,7 +183,7 @@ export async function getAllMeetings(req, res) {
 export async function getMeetingNote(req, res) {
   try {
     const { meetingId } = req.params;
-    const meeting = meetingService.getMeeting(meetingId);
+    const meeting = await meetingService.getMeeting(meetingId);
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });

@@ -18,6 +18,11 @@ export const config = {
     authtoken: process.env.NGROK_AUTHTOKEN,
     domain: process.env.NGROK_DOMAIN,
   },
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  },
 };
 
 // Validate required environment variables

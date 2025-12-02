@@ -4,7 +4,11 @@
  * @returns {Object} Generated note
  */
 export function generateNote(transcript) {
-  if (!transcript || !transcript.segments || transcript.segments.length === 0) {
+  // Handle Nylas transcript format: transcript.transcript array
+  // Also support legacy format: transcript.segments array
+  const segments = transcript?.transcript || [];
+
+  if (!transcript || segments.length === 0) {
     return {
       summary: 'No transcript available.',
       keyPoints: [],
@@ -14,21 +18,21 @@ export function generateNote(transcript) {
   }
 
   // Extract text from transcript segments
-  const fullText = transcript.segments
+  const fullText = segments
     .map(segment => segment.text || '')
     .join(' ')
     .trim();
 
   // Extract participants (speakers)
   const participants = new Set();
-  transcript.segments.forEach(segment => {
+  segments.forEach(segment => {
     if (segment.speaker) {
       participants.add(segment.speaker);
     }
   });
 
   // Generate a simple summary (first 200 characters)
-  const summary = fullText.length > 200 
+  const summary = fullText.length > 200
     ? fullText.substring(0, 200) + '...'
     : fullText;
 
@@ -37,20 +41,25 @@ export function generateNote(transcript) {
   const keyPoints = sentences
     .filter(sentence => {
       const lower = sentence.toLowerCase();
-      return lower.includes('?') || 
-             lower.includes('important') || 
-             lower.includes('action') ||
-             lower.includes('decision') ||
-             lower.includes('next');
+      return lower.includes('?') ||
+        lower.includes('important') ||
+        lower.includes('action') ||
+        lower.includes('decision') ||
+        lower.includes('next');
     })
     .slice(0, 5)
     .map(s => s.trim());
 
   // Calculate duration if available
+  // Nylas format uses 'end' (in milliseconds), legacy format uses 'end_time' (in seconds)
   let duration = 0;
-  if (transcript.segments.length > 0) {
-    const lastSegment = transcript.segments[transcript.segments.length - 1];
-    if (lastSegment.end_time) {
+  if (segments.length > 0) {
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment.end) {
+      // Nylas format: end is in milliseconds, convert to seconds
+      duration = Math.round(lastSegment.end / 1000);
+    } else if (lastSegment.end_time) {
+      // Legacy format: end_time is already in seconds
       duration = Math.round(lastSegment.end_time);
     }
   }
@@ -62,6 +71,7 @@ export function generateNote(transcript) {
     duration, // in seconds
     wordCount: fullText.split(/\s+/).length,
     generatedAt: new Date().toISOString(),
+    transcriptType: transcript.type || 'unknown', // e.g., "speaker_labelled"
   };
 }
 
