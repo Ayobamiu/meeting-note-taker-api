@@ -11,6 +11,7 @@ class NylasService {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
+      timeout: 10000, // 10 second timeout
     });
   }
 
@@ -51,6 +52,15 @@ class NylasService {
       );
       return response.data;
     } catch (error) {
+      // Handle timeout and gateway errors gracefully
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.warn('⚠️  Timeout getting notetaker status (API may be slow)');
+        throw new Error('Request timeout - Nylas API is taking longer than expected');
+      }
+      if (error.response?.status === 504 || error.response?.status === 502) {
+        console.warn('⚠️  Gateway timeout/error getting notetaker status');
+        throw new Error('Gateway timeout - Nylas API is temporarily unavailable');
+      }
       console.error('Error getting notetaker status:', error.response?.data || error.message);
       throw new Error(`Failed to get notetaker status: ${error.response?.data?.message || error.message}`);
     }

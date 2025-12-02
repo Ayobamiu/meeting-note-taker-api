@@ -75,7 +75,8 @@ export async function getMeetingStatus(req, res) {
       return res.status(404).json({ error: 'Meeting not found' });
     }
 
-    // If notetaker is deployed, check status with Nylas
+    // If notetaker is deployed, check status with Nylas (non-blocking)
+    // Note: We rely primarily on webhooks for status updates, this is just a fallback
     if (meeting.notetakerId && meeting.status !== 'completed' && meeting.status !== 'failed') {
       try {
         const notetakerStatus = await nylasService.getNotetakerStatus(
@@ -117,7 +118,7 @@ export async function getMeetingStatus(req, res) {
                 meeting.grantId,
                 meeting.notetakerId
               );
-
+              
               if (transcript) {
                 meetingService.setTranscript(meeting.id, transcript);
                 const note = generateNote(transcript);
@@ -129,7 +130,13 @@ export async function getMeetingStatus(req, res) {
           }
         }
       } catch (error) {
-        console.error('Error checking notetaker status:', error);
+        // Don't fail the request if status check times out - webhooks will update status
+        if (error.message.includes('timeout') || error.message.includes('Gateway')) {
+          console.warn('⚠️  Status check timed out (webhooks will provide updates):', error.message);
+        } else {
+          console.error('Error checking notetaker status:', error);
+        }
+        // Continue to return the current meeting status even if API check fails
       }
     }
 
