@@ -99,15 +99,22 @@ async function processWebhookEvent(event) {
         break;
 
       case 'notetaker.media':
-        // Media files (transcript, recording, summary, action items) are now available
-        console.log('📁 Media files available for notetaker:', notetakerId);
-        await handleMediaAvailable(notetakerId, grantId, notetakerData.media || data.media);
+        // Media status changed (available, deleted, error, processing)
+        const mediaState = notetakerData.state || data.state;
+        const media = notetakerData.media || data.media;
+        console.log('📁 Media event for notetaker:', notetakerId, 'State:', mediaState);
+        await handleMediaAvailable(notetakerId, grantId, media, mediaState);
         break;
 
       case 'notetaker.updated':
-        // Notetaker configuration was updated
-        console.log('🔄 Notetaker updated:', notetakerId);
-        // Could update meeting settings if needed
+        // Notetaker status changed (attending, connecting, disconnected, failed_entry, scheduled, waiting_for_entry)
+        const updatedState = notetakerData.state || data.state;
+        console.log('🔄 Notetaker updated:', notetakerId, 'State:', updatedState);
+        await handleNotetakerStatusUpdate({
+          notetakerId,
+          grantId,
+          state: updatedState,
+        });
         break;
 
       case 'notetaker.deleted':
@@ -173,57 +180,76 @@ async function handleMeetingStateChange(data) {
     console.log(`   Meeting State: ${meetingState}`);
     console.log(`   Status: ${status}`);
 
-    // Map Nylas meeting states to our statuses (based on official documentation and actual events)
+    // Map Nylas meeting states to our statuses (based on official documentation)
+    // meeting_state values: api_request, bad_meeting_code, dispatched, entry_denied, 
+    // internal_error, kicked, no_meeting_activity, no_participants, no_response, 
+    // recording_active, waiting_for_entry
     switch (meetingState) {
       case 'dispatched':
-        // Notetaker has been dispatched but not yet connecting
+        // Notetaker has loaded the meeting page
         updateMeetingByNotetakerId(notetakerId, {
           status: 'joining',
         });
         updateProgressByNotetakerId(notetakerId, 'Notetaker dispatched. Preparing to join...', 25);
         break;
 
-      case 'connecting':
       case 'waiting_for_entry':
-        // Notetaker is connecting or waiting to enter meeting (lobby, etc.)
+        // Notetaker is waiting to be admitted to the meeting
         updateMeetingByNotetakerId(notetakerId, {
           status: 'joining',
         });
-        updateProgressByNotetakerId(notetakerId, 'Connecting to meeting...', 30);
+        updateProgressByNotetakerId(notetakerId, 'Waiting to be admitted to meeting...', 30);
         break;
 
-      case 'attending':
-      case 'recording_started':
       case 'recording_active':
-        // Notetaker is in the meeting and recording
+        // Notetaker is attending and recording
         updateMeetingByNotetakerId(notetakerId, {
           status: 'recording',
         });
         updateProgressByNotetakerId(notetakerId, 'In meeting. Recording...', 60);
         break;
 
-      case 'left_meeting':
-      case 'disconnected':
-        // Meeting ended, but wait for notetaker.media event for transcript
+      case 'api_request':
+        // Notetaker left because of Remove from Meeting request
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'processing',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Recording stopped. Processing...', 80);
+        break;
+
+      case 'no_meeting_activity':
+      case 'no_participants':
+        // Notetaker left because no activity or no participants
         updateMeetingByNotetakerId(notetakerId, {
           status: 'processing',
         });
         updateProgressByNotetakerId(notetakerId, 'Meeting ended. Processing recording...', 80);
         break;
 
-      case 'failed_entry':
+      case 'bad_meeting_code':
+      case 'entry_denied':
+      case 'no_response':
+        // Failed to join meeting
         updateMeetingByNotetakerId(notetakerId, {
           status: 'failed',
         });
-        updateProgressByNotetakerId(notetakerId, 'Failed to join meeting', 0);
+        updateProgressByNotetakerId(notetakerId, `Failed to join: ${meetingState}`, 0);
         break;
 
-      case 'api_request':
-        // Notetaker was removed via API
+      case 'kicked':
+        // Notetaker was removed by a participant
         updateMeetingByNotetakerId(notetakerId, {
-          status: 'processing',
+          status: 'failed',
         });
-        updateProgressByNotetakerId(notetakerId, 'Recording stopped. Processing...', 80);
+        updateProgressByNotetakerId(notetakerId, 'Removed from meeting by participant', 0);
+        break;
+
+      case 'internal_error':
+        // Notetaker encountered an error
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'failed',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Internal error occurred', 0);
         break;
 
       default:
@@ -236,7 +262,74 @@ async function handleMeetingStateChange(data) {
   }
 }
 
-async function handleMediaAvailable(notetakerId, grantId, media) {
+async function handleNotetakerStatusUpdate(data) {
+  try {
+    const { notetakerId, grantId, state } = data;
+
+    if (!notetakerId) {
+      console.log('⚠️  Notetaker status update without notetaker_id');
+      return;
+    }
+
+    console.log(`   Notetaker ID: ${notetakerId}`);
+    console.log(`   Status: ${state}`);
+
+    // Map notetaker.updated state values: attending, connecting, disconnected, 
+    // failed_entry, scheduled, waiting_for_entry
+    switch (state) {
+      case 'scheduled':
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'joining',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Notetaker scheduled. Waiting...', 15);
+        break;
+
+      case 'connecting':
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'joining',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Connecting to meeting...', 30);
+        break;
+
+      case 'waiting_for_entry':
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'joining',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Waiting to be admitted...', 35);
+        break;
+
+      case 'attending':
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'recording',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Attending meeting. Recording...', 60);
+        break;
+
+      case 'disconnected':
+        // Notetaker left, wait for media event
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'processing',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Disconnected. Processing recording...', 80);
+        break;
+
+      case 'failed_entry':
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'failed',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Failed to enter meeting', 0);
+        break;
+
+      default:
+        console.log(`   ⚠️  Unknown notetaker status: ${state}`);
+        updateProgressByNotetakerId(notetakerId, `Status: ${state}`, 50);
+    }
+  } catch (error) {
+    console.error('❌ Error handling notetaker status update:', error);
+  }
+}
+
+async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
   try {
     const meetings = meetingService.getAllMeetings();
     const meeting = meetings.find(m => m.notetakerId === notetakerId);
@@ -246,52 +339,76 @@ async function handleMediaAvailable(notetakerId, grantId, media) {
       return;
     }
 
-    console.log('📁 Processing media files...');
+    console.log('📁 Media event received');
+    console.log('   Media State:', mediaState);
     console.log('   Transcript URL:', media?.transcript);
     console.log('   Recording URL:', media?.recording);
     console.log('   Summary URL:', media?.summary);
     console.log('   Action Items URL:', media?.action_items);
 
-    // Update progress
-    meetingService.updateProgress(meeting.id, 'Media files available. Generating note...', 90);
+    // Handle different media states: available, deleted, error, processing
+    switch (mediaState) {
+      case 'processing':
+        meetingService.updateProgress(meeting.id, 'Processing recording and transcription...', 85);
+        break;
 
-    // Fetch transcript if available
-    if (media?.transcript) {
-      try {
-        // Download transcript from URL
-        const transcriptResponse = await axios.get(media.transcript);
-        const transcript = transcriptResponse.data;
+      case 'available':
+        // Media files are available, fetch and process
+        meetingService.updateProgress(meeting.id, 'Media files available. Generating note...', 90);
 
-        if (transcript) {
-          meetingService.setTranscript(meeting.id, transcript);
+        // Fetch transcript if available
+        if (media?.transcript) {
+          try {
+            // Download transcript from URL
+            const transcriptResponse = await axios.get(media.transcript);
+            const transcript = transcriptResponse.data;
 
-          // Generate note from transcript
-          const note = generateNote(transcript);
-          meetingService.setNote(meeting.id, note);
+            if (transcript) {
+              meetingService.setTranscript(meeting.id, transcript);
 
-          // Store media URLs
-          meetingService.updateMeeting(meeting.id, {
-            recording: media.recording,
-            note: {
-              ...note,
-              summaryUrl: media.summary,
-              actionItemsUrl: media.action_items,
-            },
-            status: 'completed',
-          });
+              // Generate note from transcript
+              const note = generateNote(transcript);
+              meetingService.setNote(meeting.id, note);
 
-          meetingService.updateProgress(meeting.id, 'Note generated successfully!', 100);
-          console.log('✅ Note generated from media files');
+              // Store media URLs
+              meetingService.updateMeeting(meeting.id, {
+                recording: media.recording,
+                note: {
+                  ...note,
+                  summaryUrl: media.summary,
+                  actionItemsUrl: media.action_items,
+                },
+                status: 'completed',
+              });
+
+              meetingService.updateProgress(meeting.id, 'Note generated successfully!', 100);
+              console.log('✅ Note generated from media files');
+            }
+          } catch (error) {
+            console.error('❌ Error fetching transcript from media URL:', error);
+            // Fallback: try using the API
+            await handleMeetingCompleted(notetakerId, grantId);
+          }
+        } else {
+          // No transcript URL, try API fallback
+          console.log('   No transcript URL in media, trying API...');
+          await handleMeetingCompleted(notetakerId, grantId);
         }
-      } catch (error) {
-        console.error('❌ Error fetching transcript from media URL:', error);
-        // Fallback: try using the API
-        await handleMeetingCompleted(notetakerId, grantId);
-      }
-    } else {
-      // No transcript URL, try API fallback
-      console.log('   No transcript URL in media, trying API...');
-      await handleMeetingCompleted(notetakerId, grantId);
+        break;
+
+      case 'error':
+        meetingService.updateProgress(meeting.id, 'Error processing recording', 0);
+        meetingService.updateMeeting(meeting.id, {
+          status: 'failed',
+        });
+        break;
+
+      case 'deleted':
+        console.log('   Media files were deleted');
+        break;
+
+      default:
+        console.log(`   ⚠️  Unknown media state: ${mediaState}`);
     }
   } catch (error) {
     console.error('❌ Error handling media availability:', error);
