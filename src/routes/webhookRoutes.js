@@ -331,8 +331,7 @@ async function handleNotetakerStatusUpdate(data) {
 
 async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
   try {
-    const meetings = meetingService.getAllMeetings();
-    const meeting = meetings.find(m => m.notetakerId === notetakerId);
+    const meeting = await meetingService.findByNotetakerId(notetakerId);
 
     if (!meeting) {
       console.error('⚠️  Meeting not found for notetaker:', notetakerId);
@@ -359,11 +358,19 @@ async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
         // Fetch transcript if available
         if (media?.transcript) {
           try {
+            console.log('   Attempting to download transcript from:', media.transcript);
             // Download transcript from URL
-            const transcriptResponse = await axios.get(media.transcript);
+            // Note: Some URLs might require authentication or have CORS restrictions
+            const transcriptResponse = await axios.get(media.transcript, {
+              timeout: 30000, // 30 second timeout
+              headers: {
+                'Accept': 'application/json',
+              },
+            });
             const transcript = transcriptResponse.data;
 
             if (transcript) {
+              console.log('   ✅ Transcript downloaded successfully');
               await meetingService.setTranscript(meeting.id, transcript);
 
               // Generate note from transcript
@@ -383,10 +390,18 @@ async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
 
               await meetingService.updateProgress(meeting.id, 'Note generated successfully!', 100);
               console.log('✅ Note generated from media files');
+            } else {
+              console.log('   ⚠️  Transcript data is empty');
+              // Fallback: try using the API
+              await handleMeetingCompleted(notetakerId, grantId);
             }
           } catch (error) {
-            console.error('❌ Error fetching transcript from media URL:', error);
+            console.error('❌ Error fetching transcript from media URL:', error.message);
+            console.error('   URL:', media.transcript);
+            console.error('   Status:', error.response?.status);
+            console.error('   Response:', error.response?.data);
             // Fallback: try using the API
+            console.log('   Falling back to API method...');
             await handleMeetingCompleted(notetakerId, grantId);
           }
         } else {

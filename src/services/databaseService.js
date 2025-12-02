@@ -132,7 +132,7 @@ class DatabaseService {
   async updateMeeting(meetingId, updates) {
     try {
       const client = getSupabaseClient();
-      
+
       // Map updates to database column names
       const dbUpdates = {};
       if (updates.meetingUrl !== undefined) dbUpdates.meeting_url = updates.meetingUrl;
