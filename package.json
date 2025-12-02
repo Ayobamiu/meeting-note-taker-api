@@ -1,0 +1,29 @@
+{
+  "name": "meeting-note-taker",
+  "version": "1.0.0",
+  "description": "Google Meet bot for joining meetings and generating notes",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "meeting",
+    "transcript",
+    "nylas",
+    "google-meet"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@ngrok/ngrok": "^1.6.0",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
