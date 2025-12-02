@@ -173,9 +173,19 @@ async function handleMeetingStateChange(data) {
     console.log(`   Meeting State: ${meetingState}`);
     console.log(`   Status: ${status}`);
 
-    // Map Nylas meeting states to our statuses (based on official documentation)
+    // Map Nylas meeting states to our statuses (based on official documentation and actual events)
     switch (meetingState) {
+      case 'dispatched':
+        // Notetaker has been dispatched but not yet connecting
+        updateMeetingByNotetakerId(notetakerId, {
+          status: 'joining',
+        });
+        updateProgressByNotetakerId(notetakerId, 'Notetaker dispatched. Preparing to join...', 25);
+        break;
+
       case 'connecting':
+      case 'waiting_for_entry':
+        // Notetaker is connecting or waiting to enter meeting (lobby, etc.)
         updateMeetingByNotetakerId(notetakerId, {
           status: 'joining',
         });
@@ -184,6 +194,8 @@ async function handleMeetingStateChange(data) {
 
       case 'attending':
       case 'recording_started':
+      case 'recording_active':
+        // Notetaker is in the meeting and recording
         updateMeetingByNotetakerId(notetakerId, {
           status: 'recording',
         });
