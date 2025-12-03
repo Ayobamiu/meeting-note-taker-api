@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import nylasService from '../services/nylasService.js';
 import meetingService from '../services/meetingService.js';
+import s3Service from '../services/s3Service.js';
 import { generateNote } from '../services/noteGenerator.js';
 
 const router = express.Router();
@@ -377,9 +378,22 @@ async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
               const note = generateNote(transcript);
               await meetingService.setNote(meeting.id, note);
 
+              // Upload recording to S3 if available
+              let recordingUrl = media.recording;
+              if (media.recording) {
+                try {
+                  const s3Key = `recordings/${meeting.id}/${Date.now()}.mp3`;
+                  recordingUrl = await s3Service.uploadFromUrl(media.recording, s3Key, 'audio/mpeg');
+                  console.log(`   ✅ Recording uploaded to S3: ${recordingUrl}`);
+                } catch (error) {
+                  console.error('   ⚠️  Failed to upload recording to S3, using original URL:', error.message);
+                  // Continue with original URL if S3 upload fails
+                }
+              }
+
               // Store media URLs
               await meetingService.updateMeeting(meeting.id, {
-                recording: media.recording,
+                recording: recordingUrl,
                 note: {
                   ...note,
                   summaryUrl: media.summary,

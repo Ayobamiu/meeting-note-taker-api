@@ -23,6 +23,12 @@ export const config = {
     anonKey: process.env.SUPABASE_ANON_KEY,
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   },
+  s3: {
+    region: process.env.AWS_REGION || '',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    bucketName: process.env.S3_BUCKET_NAME || '',
+  },
 };
 
 // Validate required environment variables
