@@ -4,6 +4,7 @@ import {
   getMeetingStatus,
   getAllMeetings,
   getMeetingNote,
+  regenerateNote,
 } from '../controllers/meetingController.js';
 
 const router = express.Router();
@@ -19,6 +20,9 @@ router.get('/:meetingId', getMeetingStatus);
 
 // Get meeting note
 router.get('/:meetingId/note', getMeetingNote);
+
+// Regenerate meeting note
+router.post('/:meetingId/regenerate-note', regenerateNote);
 
 export default router;
 

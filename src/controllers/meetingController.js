@@ -118,10 +118,10 @@ export async function getMeetingStatus(req, res) {
                 meeting.grantId,
                 meeting.notetakerId
               );
-              
+
               if (transcript) {
                 await meetingService.setTranscript(meeting.id, transcript);
-                const note = generateNote(transcript);
+                const note = await generateNote(transcript);
                 await meetingService.setNote(meeting.id, note);
               }
             } catch (error) {
@@ -203,6 +203,51 @@ export async function getMeetingNote(req, res) {
     });
   } catch (error) {
     console.error('Error getting meeting note:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Regenerate meeting note
+ * POST /api/meetings/:meetingId/regenerate-note
+ */
+export async function regenerateNote(req, res) {
+  try {
+    console.log('🔄 Regenerate note endpoint called');
+    console.log('   Request params:', req.params);
+    console.log('   Request method:', req.method);
+    console.log('   Request path:', req.path);
+
+    const { meetingId } = req.params;
+    const meeting = await meetingService.getMeeting(meetingId);
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    if (!meeting.transcript) {
+      return res.status(400).json({
+        error: 'Transcript not available. Cannot regenerate note without transcript.',
+      });
+    }
+
+    // Regenerate note from existing transcript
+    console.log(`🔄 Regenerating note for meeting ${meetingId}...`);
+    const note = await generateNote(meeting.transcript);
+
+    // Update meeting with new note
+    await meetingService.setNote(meeting.id, note);
+
+    // Get updated meeting
+    const updatedMeeting = await meetingService.getMeeting(meetingId);
+
+    res.json({
+      success: true,
+      message: 'Note regenerated successfully',
+      note: updatedMeeting.note,
+    });
+  } catch (error) {
+    console.error('Error regenerating note:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

@@ -375,7 +375,7 @@ async function handleMediaAvailable(notetakerId, grantId, media, mediaState) {
               await meetingService.setTranscript(meeting.id, transcript);
 
               // Generate note from transcript
-              const note = generateNote(transcript);
+              const note = await generateNote(transcript);
               await meetingService.setNote(meeting.id, note);
 
               // Upload recording to S3 if available
@@ -509,7 +509,7 @@ async function handleMeetingCompleted(notetakerId, grantId) {
         await meetingService.setTranscript(meeting.id, transcript);
 
         // Generate note
-        const note = generateNote(transcript);
+        const note = await generateNote(transcript);
         await meetingService.setNote(meeting.id, note);
 
         await meetingService.updateProgress(meeting.id, 'Note generated successfully!', 100);

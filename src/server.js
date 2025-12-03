@@ -15,11 +15,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware for debugging webhooks
+// Logging middleware for debugging
 app.use((req, res, next) => {
-  if (req.path.includes('/webhooks')) {
+  if (req.path.includes('/webhooks') || req.path.includes('/regenerate-note')) {
     console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.path}`);
     console.log('Query:', req.query);
+    console.log('Params:', req.params);
     console.log('Headers:', {
       'content-type': req.headers['content-type'],
       'user-agent': req.headers['user-agent'],
@@ -31,6 +32,19 @@ app.use((req, res, next) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Test endpoint to verify route registration
+app.get('/api/test-routes', (req, res) => {
+  const routes = [];
+  meetingRoutes.stack.forEach((layer) => {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase());
+      const path = `/api/meetings${layer.route.path}`;
+      routes.push({ methods, path });
+    }
+  });
+  res.json({ routes });
 });
 
 // Get webhook URL endpoint
@@ -51,6 +65,16 @@ app.get('/webhook-url', (req, res) => {
 // API Routes
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/webhooks', webhookRoutes);
+
+// Debug: Log all registered routes on startup
+console.log('\n📋 Registered API Routes:');
+meetingRoutes.stack.forEach((layer) => {
+  if (layer.route) {
+    const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase()).join(', ');
+    const path = `/api/meetings${layer.route.path}`;
+    console.log(`   ${methods.padEnd(8)} ${path}`);
+  }
+});
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -74,7 +98,14 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
+  console.log('   Available routes: /api/meetings, /api/webhooks');
+  res.status(404).json({
+    error: 'Route not found',
+    method: req.method,
+    path: req.path,
+    message: `No route found for ${req.method} ${req.path}`
+  });
 });
 
 // Start server
